@@ -1,0 +1,21 @@
+syntax = "proto3";
+option go_package = "./port";
+
+message SavePortRequest {
+   string name = 1;
+   string city = 2;
+   string country = 3;
+   repeated string alias = 4;
+   repeated string regions = 5;
+   repeated double coordinates = 6;
+   string province = 7;
+   string timezone = 8;
+   repeated string unlocs = 9;
+   string code = 10;
+}
+
+message Empty {}
+
+service PortsService {
+   rpc SavePorts(stream SavePortRequest) returns (Empty) {}
+}
