@@ -25,32 +25,83 @@ type Port struct {
 }
 
 type Loader struct {
-	decoder json.Decoder
+	decoder *json.Decoder
 }
 
 func NewLoader(r io.Reader) *Loader {
 	return &Loader{
-		decoder: *json.NewDecoder(r),
+		decoder: json.NewDecoder(r),
 	}
 }
 
 // ParsePort decodes input Port JSON
-func (l *Loader) ParsePort() {
+func (l *Loader) parsePort() (*Port, error) {
+	dec := l.decoder
+	//fmt.Println("in off", dec.InputOffset())
+
+	if dec.More() {
+		// Ignore first key
+		t, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		fmt.Printf("2 %T: %v\n", t, t)
+
+		if dec.More() {
+			var p Port
+
+			// decode Port
+			err := dec.Decode(&p)
+			if err != nil {
+				return nil, err
+			}
+			p.Code = p.Unlocs[0]
+
+			//fmt.Printf("%+v\n", p)
+			return &p, nil
+		}
+	}
+
+	return nil, nil
 }
 
 // SendPorts insert or update Port in Database
-func (l *Loader) SendPorts() {
+func (l *Loader) ParseAndSendPorts() error {
+	logCtx := logrus.WithFields(
+		logrus.Fields{"component": "cmd", "function": "ParseAndSendPorts"},
+	)
+	dec := l.decoder
+
+	// read open bracket
+	_, err := dec.Token()
+	if err != nil {
+		return err
+	}
+
 	// Loop and Parse port before sending
+	for dec.More() {
+		port, err := l.parsePort()
+		if err != nil {
+			return err
+		}
+		// sendPortViaGRPC(port)
+		logCtx.Infof("Sending Port: %v", port)
+	}
+
+	// read close bracket
+	_, err = dec.Token()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func main() {
 	logCtx := logrus.WithFields(
 		logrus.Fields{"component": "cmd", "function": "main"},
 	)
-	logCtx.Info("Starting Client Loader")
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	logCtx.Info("*** Starting Client Loader ***")
 
 	file, err := os.Open("./clientLoader/input/ports.json")
 	if err != nil {
@@ -59,8 +110,25 @@ func main() {
 	}
 
 	loader := NewLoader(file)
-	go loader.SendPorts()
 
-	<-c
-	fmt.Println("Loader Finishing")
+	stopc := make(chan os.Signal, 1)
+	signal.Notify(stopc, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	errc := make(chan error, 1)
+
+	go func() {
+		errc <- loader.ParseAndSendPorts()
+	}()
+
+	select {
+	case <-stopc:
+		goto gracefulShutdown
+	case err = <-errc:
+		if err != nil {
+			logCtx.Error(err)
+			os.Exit(1)
+		}
+	}
+
+gracefulShutdown:
+	fmt.Println("*** Finishing Loader ***")
 }
