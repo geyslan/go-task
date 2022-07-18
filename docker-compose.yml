@@ -1,0 +1,58 @@
+version: '3'
+
+services:
+    mongo:
+      container_name: task-mongo
+      image: mongo:latest
+      restart: unless-stopped
+
+      ports:
+          - "27017:27017"
+      networks:
+          task-network:
+              ipv4_address: 172.27.0.200
+
+    grpc-server:
+        container_name: task-grpc-server
+        environment:
+            - MONGO_HOST=task-mongo
+
+        build:
+            context: .
+            dockerfile: Dockerfile-Server
+
+        mem_limit: 200m
+        mem_reservation: 200m
+
+        ports:
+            - 9090:9090
+        depends_on:
+            - mongo
+        networks:
+            task-network:
+                ipv4_address: 172.27.0.150
+
+    loader-client:
+        container_name: task-loader-client
+        environment:
+            - GRPC_SERVER_URL=task-grpc-server:9090
+        build:
+            context: .
+            dockerfile: Dockerfile-Client
+
+        mem_limit: 200m
+        mem_reservation: 200m
+
+        depends_on:
+            - grpc-server
+        networks:
+            task-network:
+                ipv4_address: 172.27.0.100
+
+networks:
+    task-network:
+        name: task-network
+        driver: bridge
+        ipam:
+          config:
+            - subnet: 172.27.0.0/24
