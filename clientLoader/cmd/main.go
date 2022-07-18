@@ -34,10 +34,9 @@ func NewLoader(r io.Reader) *Loader {
 	}
 }
 
-// ParsePort decodes input Port JSON
+// parsePort decodes Port JSON
 func (l *Loader) parsePort() (*Port, error) {
 	dec := l.decoder
-	//fmt.Println("in off", dec.InputOffset())
 
 	if dec.More() {
 		// Ignore first key
@@ -65,7 +64,7 @@ func (l *Loader) parsePort() (*Port, error) {
 	return nil, nil
 }
 
-// SendPorts insert or update Port in Database
+// ParseAndSendPorts inserts or updates Port in Database
 func (l *Loader) ParseAndSendPorts() error {
 	logCtx := logrus.WithFields(
 		logrus.Fields{"component": "cmd", "function": "ParseAndSendPorts"},
